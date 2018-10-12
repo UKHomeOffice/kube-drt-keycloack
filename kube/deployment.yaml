@@ -2,14 +2,14 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: {{ .NAME }}
+  name: drt
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        name: {{ .NAME }}
-        service: drt-{{ .NAME }}
+        name: drt
+        service: drt-drt
     spec:
       imagePullSecrets:
         - name: docker-registry-key
@@ -20,8 +20,45 @@ spec:
         - name: drtlib-volume
           emptyDir: {}
       containers:
+        - name: keycloak-proxy
+          image: quay.io/ukhomeofficedigital/go-keycloak-proxy:v2.1.1
+          imagePullPolicy: Always
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: 100m
+            requests:
+              memory: "50Mi"
+              cpu: 100m
+          args:
+            - --client-id=drt
+            - --enable-logging=true
+            - --enable-json-logging=true
+            - --upstream-response-header-timeout='30s'
+            - --server-write-timeout='120s'
+            - --resources=uri=/v2/*|roles=approved
+            - --verbose
+          ports:
+            - name: keycloak-http
+              containerPort: 8080
+          env:
+            - name: PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-proxy
+                  key: secret
+          envFrom:
+          - configMapRef:
+              name: keycloak-env
+          volumeMounts:
+            - name: keycloak-api-secret
+              mountPath: /etc/secrets
+              readOnly: true
+
         - name: drt
-          image: {{ .IMAGE_URL }}
+          image: image
           imagePullPolicy: Always
           securityContext:
             runAsNonRoot: true
@@ -54,12 +91,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: dq-s3-bucket-secret
-                  key: secret_access_key      
+                  key: secret_access_key
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: dq-s3-bucket-secret
-                  key: secret_access_key      
+                  key: secret_access_key
             - name: JAVA_OPTS
               valueFrom:
                 secretKeyRef:
@@ -73,25 +110,25 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .NAME }}-db-secret
+                  name: drt-db-secret
                   key: password
             - name: POSTGRES_USER
-              value: {{ .NAME }}_user
+              value: drt_user
           envFrom:
           - configMapRef:
-              name: drt-{{ .NAME }}
+              name: drt-drt
           ports:
             - containerPort: 9000
       initContainers:
         - name: copy-csv
-          image: {{ .INIT_IMAGE_URL }}
-          command: 
+          image: image
+          command:
           - aws
           - "s3"
           - "cp"
           - "s3://drt-notprod-s3/"
-          - "/data/"  
-          - "--recursive" 
+          - "/data/"
+          - "--recursive"
           env:
           - name: S3_BUCKET
             valueFrom:
@@ -106,8 +143,12 @@ spec:
           - name: AWS_SECRET_ACCESS_KEY
             valueFrom:
               secretKeyRef:
-                name: drt-notprod-s3-bucket 
+                name: drt-notprod-s3-bucket
                 key: secret_access_key
           volumeMounts:
           - name: drtlib-volume
             mountPath: /data
+      volumes:
+        - name: keycloak-api-secret
+          secret:
+            secretName: keycloak-api-secret
