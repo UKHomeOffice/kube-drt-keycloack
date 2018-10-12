@@ -1,0 +1,113 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .NAME }}
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: {{ .NAME }}
+        service: drt-{{ .NAME }}
+    spec:
+      imagePullSecrets:
+        - name: docker-registry-key
+      volumes:
+        - name: acl-volume
+          secret:
+            secretName: drt-acl-ssh
+        - name: drtlib-volume
+          emptyDir: {}
+      containers:
+        - name: drt
+          image: {{ .IMAGE_URL }}
+          imagePullPolicy: Always
+          securityContext:
+            runAsNonRoot: true
+
+          volumeMounts:
+          - name: acl-volume
+            mountPath: "/etc/drt"
+            readOnly: true
+          - name: drtlib-volume
+            mountPath: "/var/lib/drt-v2"
+
+          resources:
+            requests:
+              memory: "8Gi"
+              cpu: "2"
+            limits:
+              memory: "12Gi"
+              cpu: "4"
+
+          command: ["bin/drt"]
+          args: ["-Duser.timezone=UTC"]
+
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: dq-s3-bucket-secret
+                  key: access_key_id
+            - name: AWS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dq-s3-bucket-secret
+                  key: secret_access_key      
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dq-s3-bucket-secret
+                  key: secret_access_key      
+            - name: JAVA_OPTS
+              valueFrom:
+                secretKeyRef:
+                  name: drt-play-secret
+                  key: play-secret
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: drt-dev-rds
+                  key: endpoint
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .NAME }}-db-secret
+                  key: password
+            - name: POSTGRES_USER
+              value: {{ .NAME }}_user
+          envFrom:
+          - configMapRef:
+              name: drt-{{ .NAME }}
+          ports:
+            - containerPort: 9000
+      initContainers:
+        - name: copy-csv
+          image: {{ .INIT_IMAGE_URL }}
+          command: 
+          - aws
+          - "s3"
+          - "cp"
+          - "s3://drt-notprod-s3/"
+          - "/data/"  
+          - "--recursive" 
+          env:
+          - name: S3_BUCKET
+            valueFrom:
+              secretKeyRef:
+                name: drt-notprod-s3-bucket
+                key: name
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: drt-notprod-s3-bucket
+                key: access_key_id
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: drt-notprod-s3-bucket 
+                key: secret_access_key
+          volumeMounts:
+          - name: drtlib-volume
+            mountPath: /data

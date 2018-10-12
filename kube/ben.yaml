@@ -1,0 +1,55 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: ltn
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: ltn
+        service: drt-ltn
+    spec:
+      imagePullSecrets:
+        - name: docker-registry-key
+      volumes:
+        - name: acl-volume
+          secret:
+            secretName: drt-acl-ssh
+        - name: drtlib-volume
+          emptyDir: {}
+      containers:
+        - name: keycloak-proxy
+          image: quay.io/ukhomeofficedigital/go-keycloak-proxy:v2.1.1
+          imagePullPolicy: Always
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            limits:
+              memory: "100Mi"
+              cpu: 100m
+            requests:
+              memory: "50Mi"
+              cpu: 100m
+          args:
+            - --client-id=drt
+            - --enable-logging=true
+            - --enable-json-logging=true
+            - --upstream-response-header-timeout='30s'
+            - --server-write-timeout='120s'
+            - --resources=uri=/v2/*|roles=approved
+            - --verbose
+          ports:
+            - name: keycloak-http
+              containerPort: 8080
+          env:
+            - name: PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-proxy
+                  key: secret
+          envFrom:
+          - configMapRef:
+              name: keycloak-env
+

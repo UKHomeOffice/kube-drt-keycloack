@@ -1,0 +1,24 @@
+pipeline:
+  
+
+  deploy-to-kube:
+    image: quay.io/ukhomeofficedigital/kd:v0.13.0
+    secrets:
+      - kube_token_acp_notprod
+    environment:
+      - IMAGE_URL=docker.digital.homeoffice.gov.uk/drt/drt
+      - INIT_IMAGE_URL=quay.io/ukhomeofficedigital/docker-aws-cli:latest
+    commands:
+      - apk update
+      - apk add curl
+      - bin/deploy.sh
+    when:
+      event: deployment
+
+  slack:
+    image: plugins/slack
+    webhook: https://hooks.slack.com/services/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
+    channel: logs
+    username: drone
+    when:
+      status: [ success, failure ]    
