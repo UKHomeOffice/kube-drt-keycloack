@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-env
+  namespace: drt-dev
+data:
+  PROXY_ADDRESS_FORWARDING: true
+  PROXY_DISCOVERY_URL: https://sso-dev.notprod.homeoffice.gov.uk/auth/realms/drt-notprod
+  PROXY_REVOCATION_URL: https://sso-dev.notprod.homeoffice.gov.uk/auth/realms/drt-notprod/protocol/openid-connect/logout
+  PROXY_LISTEN: 0.0.0.0:8080
+  PROXY_REDIRECTION_URL: https://pal.dev.bf.drt.homeoffice.gov.uk
+  PROXY_UPSTREAM_URL: http://0.0.0.0:9000
+  PROXY_ENABLE_REFRESH_TOKEN: "true"
